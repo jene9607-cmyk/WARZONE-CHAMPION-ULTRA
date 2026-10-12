@@ -1,0 +1,47 @@
+name: Build WARZONE CHAMPION ULTRA Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'WARZONE-CHAMPION-ULTRA-ANDROID.zip'
+      - '.github/workflows/main.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download repository files
+        uses: actions/checkout@v4
+
+      - name: Install Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Extract Android project
+        run: |
+          unzip -q WARZONE-CHAMPION-ULTRA-ANDROID.zip -d extracted
+          test -f extracted/WARZONE-CHAMPION-ULTRA-ANDROID/settings.gradle.kts
+
+      - name: Build Android APK
+        run: |
+          gradle -p extracted/WARZONE-CHAMPION-ULTRA-ANDROID :app:assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: WARZONE-CHAMPION-ULTRA-APK
+          path: extracted/WARZONE-CHAMPION-ULTRA-ANDROID/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
