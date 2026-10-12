@@ -18,7 +18,7 @@ jobs:
       - name: Download repository files
         uses: actions/checkout@v4
 
-      - name: Install Java
+      - name: Install Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -33,6 +33,66 @@ jobs:
         run: |
           unzip -q WARZONE-CHAMPION-ULTRA-ANDROID.zip -d extracted
           test -f extracted/WARZONE-CHAMPION-ULTRA-ANDROID/settings.gradle.kts
+          test -f extracted/WARZONE-CHAMPION-ULTRA-ANDROID/app/build.gradle.kts
+
+      - name: Fix Java and Kotlin versions
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("extracted/WARZONE-CHAMPION-ULTRA-ANDROID/app/build.gradle.kts")
+          s = p.read_text()
+
+          def block_end(text, opening):
+              depth = 0
+              for i in range(opening, len(text)):
+                  if text[i] == "{":
+                      depth += 1
+                  elif text[i] == "}":
+                      depth -= 1
+                      if depth == 0:
+                          return i + 1
+              raise RuntimeError("Could not find closing brace")
+
+          android_start = s.find("android")
+          android_open = s.find("{", android_start)
+          if android_start < 0 or android_open < 0:
+              raise RuntimeError("Could not find the Android configuration")
+
+          android_end = block_end(s, android_open)
+          android_block = s[android_start:android_end]
+
+          options_start = android_block.find("compileOptions")
+          new_options = """compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }"""
+
+          if options_start >= 0:
+              options_open = android_block.find("{", options_start)
+              options_end = block_end(android_block, options_open)
+              android_block = (
+                  android_block[:options_start]
+                  + new_options
+                  + android_block[options_end:]
+              )
+          else:
+              android_block = android_block[:-1] + "    " + new_options + "\n}"
+
+          s = s[:android_start] + android_block + s[android_end:]
+
+          if "kotlinOptions" not in s and "jvmTarget" not in s:
+              s += """
+          tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+              kotlinOptions {
+                  jvmTarget = "17"
+              }
+          }
+          """
+
+          p.write_text(s)
+          print("Java and Kotlin target settings updated.")
+          PY
 
       - name: Build Android APK
         run: |
